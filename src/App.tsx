@@ -78,8 +78,8 @@ export default function App() {
           <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl shadow-indigo-600/20">
             <Users size={40} className="text-white" />
           </div>
-          <h1 className="text-4xl font-bold tracking-tight mb-3 text-slate-900">SimpegPakar</h1>
-          <p className="text-slate-500 mb-10 font-medium tracking-wide">Sistem Informasi Manajemen Pegawai & Pengingat Karir Otomatis</p>
+          <h1 className="text-4xl font-bold tracking-tight mb-3 text-slate-900">Rutan Pasangkayu</h1>
+          <p className="text-slate-500 mb-10 font-medium tracking-wide">Sistem Informasi Manajemen Pegawai & E-Arsip Keuangan</p>
           <button 
             onClick={loginWithGoogle}
             className="w-full py-4.5 bg-indigo-600 text-white rounded-2xl font-bold uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20 hover:scale-[1.02] active:scale-95"
@@ -106,7 +106,7 @@ export default function App() {
                 <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
                   <Users size={22} className="text-white" />
                 </div>
-                <span className="font-extrabold text-xl tracking-tight uppercase text-slate-900">SIMPEG</span>
+                <span className="font-extrabold text-xl tracking-tight uppercase text-slate-900">RUTAN</span>
               </div>
             )}
             {!sidebarOpen && (
