@@ -72,22 +72,22 @@ export default function EArsip() {
 
   return (
     <div className="space-y-6 pt-4">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">E-Arsip Keuangan</h1>
-          <p className="text-slate-500 mt-1 font-medium">Kelola arsip SPM & Kwitansi secara digital.</p>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">E-Arsip Keuangan</h1>
+          <p className="text-slate-500 mt-1 font-medium text-sm md:text-base">Kelola arsip SPM & Kwitansi secara digital.</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-8 py-3.5 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/30">
+        <button onClick={() => setShowForm(true)} className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-6 py-3.5 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/30 active:scale-95 w-full md:w-auto md:self-start text-sm">
           <Plus size={18} /> Tambah Arsip
         </button>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon={<FileText className="text-indigo-600" size={24} />} label="Total Arsip" value={documents.length.toString()} color="bg-indigo-50" glow="glow-indigo" />
-        <StatCard icon={<DollarSign className="text-emerald-600" size={24} />} label="Total Nominal" value={`Rp ${totalNominal.toLocaleString('id-ID')}`} color="bg-emerald-50" />
-        <StatCard icon={<Zap className="text-amber-600" size={24} />} label="Total SPM" value={documents.filter(d => d.type.startsWith('spm')).length.toString()} color="bg-amber-50" />
-        <StatCard icon={<Receipt className="text-emerald-600" size={24} />} label="Total Kwitansi" value={documents.filter(d => d.type === 'kwitansi').length.toString()} color="bg-emerald-50" />
+      <div className="grid grid-cols-2 gap-3 md:gap-4 md:grid-cols-4">
+        <StatCard icon={<FileText className="text-indigo-600" size={20} />} label="Total Arsip" value={documents.length.toString()} color="bg-indigo-50" glow="glow-indigo" />
+        <StatCard icon={<DollarSign className="text-emerald-600" size={20} />} label="Total Nominal" value={`Rp ${totalNominal.toLocaleString('id-ID')}`} color="bg-emerald-50" />
+        <StatCard icon={<Zap className="text-amber-600" size={20} />} label="Total SPM" value={documents.filter(d => d.type.startsWith('spm')).length.toString()} color="bg-amber-50" />
+        <StatCard icon={<Receipt className="text-emerald-600" size={20} />} label="Total Kwitansi" value={documents.filter(d => d.type === 'kwitansi').length.toString()} color="bg-emerald-50" />
       </div>
 
       {/* Tabs */}
@@ -143,21 +143,57 @@ export default function EArsip() {
       ) : (
         <>
           {/* Search & Filter */}
-          <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
-            <div className="relative group flex-1">
+          <div className="flex flex-col gap-3">
+            <div className="relative group">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={18} />
               <input type="text" placeholder="Cari nomor surat, judul..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
                 className="bg-white border border-slate-200 pl-11 pr-4 py-3.5 rounded-2xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none w-full transition-all text-sm font-medium text-slate-700 placeholder:text-slate-400" />
             </div>
             <select value={filterType} onChange={(e) => setFilterType(e.target.value as DocType | 'all')}
-              className="bg-white border border-slate-200 px-4 py-3.5 rounded-2xl text-sm font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+              className="bg-white border border-slate-200 px-4 py-3.5 rounded-2xl text-sm font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 w-full md:w-auto">
               <option value="all">Semua Tipe</option>
               {Object.entries(DOC_TYPE_CONFIG).map(([key, cfg]) => <option key={key} value={key}>{cfg.label}</option>)}
             </select>
           </div>
 
-          {/* Table */}
-          <div className="bg-white rounded-3xl overflow-hidden border border-slate-200 shadow-sm glow-indigo">
+          {/* Mobile Card List */}
+          <div className="md:hidden space-y-3">
+            <AnimatePresence>
+              {filtered.map((d) => {
+                const config = DOC_TYPE_CONFIG[d.type];
+                return (
+                  <motion.div key={d.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className="bg-white border border-slate-200 rounded-2xl p-4 active:bg-slate-50 transition-all shadow-sm"
+                    onClick={() => setShowDetail(d)}>
+                    <div className="flex items-start justify-between mb-3">
+                      <span className={cn("inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg border", config.color, config.bgColor, config.borderColor)}>
+                        {config.icon} {config.label}
+                      </span>
+                      <div className="flex gap-1.5">
+                        {d.fileUrl && <a href={d.fileUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100"><Paperclip size={14} /></a>}
+                        <button onClick={(e) => { e.stopPropagation(); handleDelete(d.id); }} className="p-2 bg-white border border-slate-100 text-slate-400 rounded-lg active:bg-rose-50 active:text-rose-500"><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                    <h3 className="font-bold text-slate-900 text-sm leading-tight">{d.title}</h3>
+                    <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{d.nomorSurat}</p>
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                      <span className="text-[11px] font-bold text-slate-400 font-mono">{d.tanggal}</span>
+                      <span className="text-sm font-bold text-emerald-600">Rp {d.nominal.toLocaleString('id-ID')}</span>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+            {filtered.length === 0 && (
+              <div className="p-12 text-center flex flex-col items-center bg-white rounded-2xl border border-slate-200">
+                <Archive size={40} className="text-slate-200 mb-3" />
+                <p className="text-slate-400 font-medium text-sm">Belum ada arsip.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop Table */}
+          <div className="hidden md:block bg-white rounded-3xl overflow-hidden border border-slate-200 shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -176,9 +212,7 @@ export default function EArsip() {
                       const config = DOC_TYPE_CONFIG[d.type];
                       return (
                         <motion.tr key={d.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="group hover:bg-slate-50 cursor-pointer transition-all" onClick={() => setShowDetail(d)}>
-                          <td className="px-6 py-4">
-                            <span className={cn("inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg border", config.color, config.bgColor, config.borderColor)}>{config.icon} {config.label}</span>
-                          </td>
+                          <td className="px-6 py-4"><span className={cn("inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg border", config.color, config.bgColor, config.borderColor)}>{config.icon} {config.label}</span></td>
                           <td className="px-6 py-4">
                             <p className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-tight">{d.title}</p>
                             <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{d.nomorSurat}</p>
@@ -218,18 +252,15 @@ export default function EArsip() {
 /* ======================== STAT CARD ======================== */
 function StatCard({ icon, label, value, color, glow }: { icon: React.ReactNode; label: string; value: string; color: string; glow?: string }) {
   return (
-    <motion.div
-      whileHover={{ y: -4 }}
-      className={cn("bg-white border border-slate-200 p-6 rounded-3xl flex items-center justify-between shadow-sm", glow)}
-    >
-      <div>
-        <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">{label}</p>
-        <p className="text-2xl font-bold tracking-tight text-slate-900">{value}</p>
+    <div className={cn("bg-white border border-slate-200 p-4 md:p-6 rounded-2xl md:rounded-3xl flex items-center justify-between shadow-sm", glow)}>
+      <div className="min-w-0 flex-1">
+        <p className="text-[9px] md:text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">{label}</p>
+        <p className="text-lg md:text-2xl font-bold tracking-tight text-slate-900 truncate">{value}</p>
       </div>
-      <div className={cn("p-4 rounded-2xl border border-white/50", color)}>
+      <div className={cn("p-3 md:p-4 rounded-xl md:rounded-2xl border border-white/50 ml-2 shrink-0", color)}>
         {icon}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
