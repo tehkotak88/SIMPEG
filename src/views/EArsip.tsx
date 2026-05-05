@@ -25,6 +25,7 @@ interface ArsipDocument {
   fileUrl?: string;
   fileName?: string;
   createdAt: any;
+  status?: 'uploading' | 'ready';
 }
 
 const DOC_TYPE_CONFIG: Record<DocType, { label: string; icon: React.ReactNode; color: string; bgColor: string; borderColor: string }> = {
@@ -259,7 +260,19 @@ export default function EArsip({ category = 'all' }: { category?: 'spm' | 'spp' 
                           </td>
                           <td className="px-6 py-4 text-xs font-bold text-slate-500 font-mono">{d.tanggal}</td>
                           <td className="px-6 py-4 text-sm font-bold text-emerald-600 text-right">{d.type !== 'data_dukung' ? `Rp ${d.nominal.toLocaleString('id-ID')}` : '-'}</td>
-                          <td className="px-6 py-4">{d.fileUrl ? <a href={d.fileUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100 hover:bg-indigo-100"><Paperclip size={12} /> PDF</a> : <span className="text-slate-300 text-xs">-</span>}</td>
+                          <td className="px-6 py-4">
+                            {d.status === 'uploading' ? (
+                              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100 animate-pulse">
+                                <Clock size={12} /> Sedang Unggah...
+                              </span>
+                            ) : d.fileUrl ? (
+                              <a href={d.fileUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100 hover:bg-indigo-100">
+                                <Paperclip size={12} /> PDF
+                              </a>
+                            ) : (
+                              <span className="text-slate-300 text-xs">-</span>
+                            )}
+                          </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center justify-end gap-2">
                               <button onClick={(e) => { e.stopPropagation(); setShowDetail(d); }} className="p-2.5 bg-white border border-slate-100 hover:border-indigo-200 hover:text-indigo-600 rounded-xl transition-all text-slate-400 shadow-sm"><Eye size={16} /></button>
@@ -357,51 +370,51 @@ function AddArsipModal({ onClose, category }: { onClose: () => void; category: s
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
-
     setSubmitting(true);
 
-    const saveData = async (url: string, fileName: string) => {
-      try {
-        await addDoc(collection(db, 'arsip'), { 
-          ...formData, 
-          fileUrl: url, 
-          fileName: fileName, 
-          createdAt: serverTimestamp() 
-        });
-        console.log('Document saved successfully!');
-      } catch (error) {
-        console.error('Background save failed:', error);
-      }
-    };
+    try {
+      // 1. Siapkan data awal (Optimistik)
+      const isExternal = uploadMethod === 'link';
+      const initialData = {
+        ...formData,
+        fileUrl: isExternal ? externalLink : (isUploading ? '' : uploadedUrl),
+        fileName: isExternal ? 'External Link' : (pdfFile?.name || ''),
+        status: (isExternal || !isUploading) ? 'ready' : 'uploading',
+        createdAt: serverTimestamp()
+      };
 
-    if (uploadMethod === 'file') {
-      if (!pdfFile && !uploadedUrl) {
-        alert('Silakan pilih file PDF.');
-        setSubmitting(false);
-        return;
-      }
+      // 2. Simpan ke Firestore SEKARANG agar langsung muncul di tabel
+      const docRef = await addDoc(collection(db, 'arsip'), initialData);
+      console.log('Initial document created:', docRef.id);
 
-      if (isUploading) {
-        // Trik: Kita jalankan simpan di background. 
-        // Kita panggil upload lagi tapi versi yang langsung save di akhir.
-        const storageRef = ref(storage, `arsip/${Date.now()}_${pdfFile!.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, pdfFile!);
+      // 3. Jika masih proses upload, biarkan uploadTask yang update Firestore nanti
+      if (uploadMethod === 'file' && isUploading && pdfFile) {
+        // Kita buat listener baru yang khusus mengupdate dokumen ini saat beres
+        const storageRef = ref(storage, `arsip/${Date.now()}_${pdfFile.name}`);
+        const uploadTask = uploadBytesResumable(storageRef, pdfFile);
         
-        uploadTask.on('state_changed', null, null, async () => {
-          const url = await getDownloadURL(uploadTask.snapshot.ref);
-          await saveData(url, pdfFile!.name);
-        });
-
-        alert('Sip! Dokumen sedang diunggah. Anda bisa lanjut bekerja, data akan otomatis muncul sebentar lagi.');
-      } else {
-        await saveData(uploadedUrl, pdfFile?.name || 'document.pdf');
+        uploadTask.on('state_changed', null, 
+          (err) => console.error('Upload background failed:', err), 
+          async () => {
+            const url = await getDownloadURL(uploadTask.snapshot.ref);
+            // Update dokumen yang tadi sudah kita buat di Firestore
+            const { updateDoc, doc } = await import('firebase/firestore');
+            await updateDoc(doc(db, 'arsip', docRef.id), {
+              fileUrl: url,
+              status: 'ready'
+            });
+            console.log('Background document updated with real URL!');
+          }
+        );
       }
-    } else {
-      await saveData(externalLink, 'External Link');
-    }
 
-    onClose();
-    setSubmitting(false);
+      onClose();
+    } catch (error) {
+      console.error('Error saving document:', error);
+      alert('Gagal menyimpan data. Silakan coba lagi.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
