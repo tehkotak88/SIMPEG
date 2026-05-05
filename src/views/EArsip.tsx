@@ -168,20 +168,32 @@ export default function EArsip({ category = 'all' }: { category?: 'spm' | 'spp' 
         </div>
       ) : (
         <>
-          {/* Search & Filter */}
-          <div className="flex flex-col gap-3">
+          {/* Search & Quick Filters */}
+          <div className="space-y-4">
             <div className="relative group">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={18} />
               <input type="text" placeholder="Cari nomor surat, judul..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
                 className="bg-white border border-slate-200 pl-11 pr-4 py-3.5 rounded-2xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none w-full transition-all text-sm font-medium text-slate-700 placeholder:text-slate-400" />
             </div>
-            <select value={filterType} onChange={(e) => setFilterType(e.target.value as DocType | 'all')}
-              className="bg-white border border-slate-200 px-4 py-3.5 rounded-2xl text-sm font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 w-full md:w-auto">
-              <option value="all">Semua Tipe</option>
-              {Object.entries(DOC_TYPE_CONFIG)
-                .filter(([key]) => category === 'all' || (category === 'spm' && key.startsWith('spm')) || (category === 'spp' && key.startsWith('spp')) || (category === 'data_dukung' && key === 'data_dukung'))
-                .map(([key, cfg]) => <option key={key} value={key}>{cfg.label}</option>)}
-            </select>
+            
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide no-scrollbar">
+                <button onClick={() => setFilterType('all')}
+                  className={cn("whitespace-nowrap px-5 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border", 
+                    filterType === 'all' ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20" : "bg-white text-slate-500 border-slate-200 hover:border-slate-300")}>
+                  Semua
+                </button>
+                {Object.entries(DOC_TYPE_CONFIG)
+                  .filter(([key]) => category === 'all' || (category === 'spm' && key.startsWith('spm')) || (category === 'spp' && key.startsWith('spp')) || (category === 'data_dukung' && key === 'data_dukung'))
+                  .map(([key, cfg]) => (
+                    <button key={key} onClick={() => setFilterType(key as DocType)}
+                      className={cn("whitespace-nowrap px-5 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border flex items-center gap-2", 
+                        filterType === key ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20" : "bg-white text-slate-500 border-slate-200 hover:border-slate-300")}>
+                      {cfg.icon} {cfg.label.replace('SPM ', '').replace('SPP ', '')}
+                    </button>
+                  ))}
+              </div>
+            </div>
           </div>
 
           {/* Mobile Card List */}
