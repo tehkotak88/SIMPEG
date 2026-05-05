@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { UploadTask } from 'firebase/storage';
 import { Archive, Plus, Search, Zap, Receipt, Calendar, DollarSign, FileText, Trash2, Eye, X, Upload, Clock, Droplets, Phone, Fuel, UtensilsCrossed, BarChart3, Paperclip, Users, Briefcase, FileStack, CreditCard } from 'lucide-react';
-import { collection, query, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { collection, query, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, uploadBytesResumable, UploadTask } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -339,44 +340,66 @@ function AddArsipModal({ onClose, category, onUploadProgress }: { onClose: () =>
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMethod, setUploadMethod] = useState<'file' | 'link'>('file');
   const [externalLink, setExternalLink] = useState('');
+  
+  const currentUploadTask = useRef<UploadTask | null>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    setPdfFile(file);
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Peringatan: File ini cukup besar (' + (file.size / (1024 * 1024)).toFixed(1) + ' MB). Pengunggahan mungkin memakan waktu lebih lama. Disarankan untuk mengecilkan ukuran PDF jika memungkinkan.');
+    // Batalkan upload sebelumnya jika ada
+    if (currentUploadTask.current) {
+      currentUploadTask.current.cancel();
     }
+
+    setPdfFile(file);
+    if (file.size > 10 * 1024 * 1024) { // Naikkan batas ke 10MB
+      alert('Peringatan: File ini besar (' + (file.size / (1024 * 1024)).toFixed(1) + ' MB). Mohon tunggu proses upload sampai selesai.');
+    }
+    
     setIsUploading(true);
     setUploadProgress(0);
 
     try {
       const storageRef = ref(storage, `arsip/${Date.now()}_${file.name}`);
-      const uploadTask = uploadBytesResumable(storageRef, file);
+      
+      // Jika file sangat kecil (di bawah 1MB), gunakan uploadBytes biasa agar lebih cepat
+      if (file.size < 1 * 1024 * 1024) {
+        setUploadProgress(50); // Set ke 50% sebagai indikator awal
+        const snapshot = await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(snapshot.ref);
+        setUploadedUrl(url);
+        setIsUploading(false);
+        setUploadProgress(100);
+        currentUploadTask.current = null;
+      } else {
+        // Untuk file besar tetap gunakan resumable agar ada progress bar
+        const uploadTask = uploadBytesResumable(storageRef, file);
+        currentUploadTask.current = uploadTask;
 
-      uploadTask.on('state_changed', 
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(progress);
-        }, 
-        (error) => {
-          console.error(error);
-          alert('Upload gagal, silakan coba lagi.');
-          setIsUploading(false);
-        }, 
-        async () => {
-          const url = await getDownloadURL(uploadTask.snapshot.ref);
-          setUploadedUrl(url);
-          setIsUploading(false);
-          
-          // Jika modal ini masih terbuka dan user sudah klik "Simpan",
-          // atau kita ingin otomatis simpan jika user sudah klik "Simpan" sebelumnya.
-          // Tapi pendekatan paling aman adalah biarkan handleSubmit yang menangani jika sudah klik.
-        }
-      );
-    } catch (error) {
-      console.error(error);
+        uploadTask.on('state_changed', 
+          (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(progress);
+          }, 
+          (error) => {
+            if (error.code !== 'storage/canceled') {
+              console.error('Full Upload Error:', error);
+              alert(`Gagal Upload: ${error.message}\nPastikan "Storage Rules" di Firebase Console sudah di-set ke Public atau Auth.`);
+            }
+            setIsUploading(false);
+          }, 
+          async () => {
+            const url = await getDownloadURL(uploadTask.snapshot.ref);
+            setUploadedUrl(url);
+            setIsUploading(false);
+            currentUploadTask.current = null;
+          }
+        );
+      }
+    } catch (error: any) {
+      console.error('General Upload Error:', error);
+      alert('Error Sistem: ' + error.message);
       setIsUploading(false);
     }
   };
@@ -387,8 +410,15 @@ function AddArsipModal({ onClose, category, onUploadProgress }: { onClose: () =>
     setSubmitting(true);
 
     try {
-      // 1. Siapkan data awal (Optimistik)
       const isExternal = uploadMethod === 'link';
+      
+      // Jika user klik simpan tapi file belum dipilih
+      if (uploadMethod === 'file' && !pdfFile && !uploadedUrl) {
+        alert('Silakan pilih file PDF.');
+        setSubmitting(false);
+        return;
+      }
+
       const initialData = {
         ...formData,
         fileUrl: isExternal ? externalLink : (isUploading ? '' : uploadedUrl),
@@ -397,39 +427,41 @@ function AddArsipModal({ onClose, category, onUploadProgress }: { onClose: () =>
         createdAt: serverTimestamp()
       };
 
-      // 2. Simpan ke Firestore SEKARANG agar langsung muncul di tabel
       const docRef = await addDoc(collection(db, 'arsip'), initialData);
-      console.log('Initial document created:', docRef.id);
 
-      // 3. Jika masih proses upload, biarkan uploadTask yang update Firestore nanti
-      if (uploadMethod === 'file' && isUploading && pdfFile) {
-        // Kita buat listener baru yang khusus mengupdate dokumen ini saat beres
-        const storageRef = ref(storage, `arsip/${Date.now()}_${pdfFile.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, pdfFile);
-        
-        uploadTask.on('state_changed', 
+      // Jika masih upload (hanya untuk yang resumable), kita pasang listener
+      if (uploadMethod === 'file' && isUploading && currentUploadTask.current) {
+        const task = currentUploadTask.current;
+        task.on('state_changed', 
           (snapshot) => {
             const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
             onUploadProgress(docRef.id, progress);
-          }, 
-          (err) => console.error('Upload background failed:', err), 
+          },
+          null,
           async () => {
-            const url = await getDownloadURL(uploadTask.snapshot.ref);
-            // Update dokumen yang tadi sudah kita buat di Firestore
-            const { updateDoc, doc } = await import('firebase/firestore');
+            const url = await getDownloadURL(task.snapshot.ref);
             await updateDoc(doc(db, 'arsip', docRef.id), {
               fileUrl: url,
               status: 'ready'
             });
-            console.log('Background document updated with real URL!');
+            onUploadProgress(docRef.id, 100);
           }
         );
+      } else if (uploadMethod === 'file' && !isUploading && uploadedUrl) {
+        // Jika upload sudah beres (khususnya untuk uploadBytes yang cepat)
+        onUploadProgress(docRef.id, 100);
       }
 
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving document:', error);
-      alert('Gagal menyimpan data. Silakan coba lagi.');
+      // Menampilkan pesan error yang lebih spesifik agar mudah dilacak
+      const errorMessage = error.message || 'Unknown error';
+      if (errorMessage.includes('permission-denied')) {
+        alert('Gagal: Izin ditolak. Pastikan Anda sudah login dan "Firestore Rules" sudah di-set ke allow read, write.');
+      } else {
+        alert('Gagal menyimpan data: ' + errorMessage);
+      }
     } finally {
       setSubmitting(false);
     }
