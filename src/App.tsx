@@ -31,7 +31,10 @@ export default function App() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        console.log('Checking initial session...');
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) console.error('Supabase session error:', error);
+        console.log('Session data:', session);
         setUser(session?.user ?? null);
       } catch (err) {
         console.error('Error checking session:', err);
@@ -43,7 +46,8 @@ export default function App() {
     checkSession();
 
     // Listen for changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event, session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
